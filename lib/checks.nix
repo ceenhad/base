@@ -15,10 +15,11 @@
 #   checks = base.lib.forSystems (pkgs: let c = pkgs.base.checks; in {
 #     api = c.rust {
 #       name = "api";
+#       root = ./.;
 #       src = c.src ./. [ "api" "shared/proto" ];
 #       dir = "api";
 #     };
-#     web = c.npm { name = "web"; src = c.src ./. [ "web" ]; dir = "web"; };
+#     web = c.npm { name = "web"; root = ./.; src = c.src ./. [ "web" ]; dir = "web"; };
 #   });
 #
 # and build one with `nix build .#checks.<system>.api`.
@@ -57,6 +58,10 @@ rec {
   rust =
     { name
     , src
+    # The checkout `src` was cut from (a path, as in `c.src ./. [ ... ]`).
+    # Give it: Cargo.lock is then read from the checkout, not from the copy
+    # in the store, which `nix flake check` on CI may not have.
+    , root ? null
     , dir ? "."
     , commands ? ''
         cargo fmt --check
@@ -72,7 +77,9 @@ rec {
     }:
     let
       craneLib = pkgs.base.crane.overrideToolchain (_: toolchain);
-      cargoLock = "${src}/${dir}/Cargo.lock";
+      cargoLock =
+        if root != null then root + "/${dir}/Cargo.lock"
+        else "${src}/${dir}/Cargo.lock";
       common = {
         pname = "ci-${name}";
         version = "0";
@@ -145,6 +152,8 @@ rec {
   npm =
     { name
     , src
+    # As for `rust`: package-lock.json is then read from the checkout.
+    , root ? null
     , dir ? "."
     , gate ? "npm run gate"
     , nativeBuildInputs ? [ ]
@@ -156,7 +165,9 @@ rec {
       inherit src nativeBuildInputs;
       nodejs = pkgs.base.node;
       sourceRoot = "source/${dir}";
-      npmDeps = pkgs.importNpmLock { npmRoot = "${src}/${dir}"; };
+      npmDeps = pkgs.importNpmLock {
+        npmRoot = if root != null then root + "/${dir}" else "${src}/${dir}";
+      };
       npmConfigHook = pkgs.importNpmLock.npmConfigHook;
       PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD = "1";
       buildPhase = ''

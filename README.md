@@ -35,8 +35,8 @@ cloud session or CI runner can fetch it with no token.
     });
 
     checks = base.lib.forSystems (pkgs: let c = pkgs.base.checks; in {
-      api = c.rust { name = "api"; src = c.src ./. [ "api" ]; dir = "api"; };
-      web = c.npm  { name = "web"; src = c.src ./. [ "web" ]; dir = "web"; };
+      api = c.rust { name = "api"; root = ./.; src = c.src ./. [ "api" ]; dir = "api"; };
+      web = c.npm  { name = "web"; root = ./.; src = c.src ./. [ "web" ]; dir = "web"; };
       tools = c.python { name = "tools"; src = c.src ./. [ "tools" ]; dir = "tools";
                          packages = ps: [ ps.httpx ]; };
     });
