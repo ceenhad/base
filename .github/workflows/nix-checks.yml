@@ -72,15 +72,21 @@ jobs:
           FILTERED: ${{ inputs.filters != '' && github.event_name == 'pull_request' }}
           CHANGED: ${{ steps.filter.outputs.changes }}
         run: |
-          all=$(nix eval --json ".#checks.$SYSTEM" --apply builtins.attrNames)
+          # Nix does the picking, so the runner needs nothing but Nix
+          # (build-mini's runners have no jq on their PATH).
           if [ "$FILTERED" = true ]; then
             changed=${CHANGED:-[]}
-            checks=$(jq -nc --argjson a "$all" --argjson c "$changed" '$a - ($a - $c)')
-            flake=$(jq -nr --argjson c "$changed" '$c | index("flake") != null')
           else
-            checks=$all
-            flake=true
+            changed=all
           fi
+          export CHANGED_JSON=$changed
+          checks=$(nix eval --json --impure ".#checks.$SYSTEM" --apply '
+            c: let
+              names = builtins.attrNames c;
+              changed = builtins.getEnv "CHANGED_JSON";
+            in if changed == "all" then names
+               else builtins.filter (n: builtins.elem n (builtins.fromJSON changed)) names')
+          case "$changed" in all|*'"flake"'*) flake=true ;; *) flake=false ;; esac
           echo "checks=$checks" >> "$GITHUB_OUTPUT"
           echo "flake=$flake" >> "$GITHUB_OUTPUT"
           echo "checks: $checks; flake: $flake"
