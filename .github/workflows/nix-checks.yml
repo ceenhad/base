@@ -1,0 +1,132 @@
+# A repo's flake checks as a CI gate, the way pro-fi-pantheon runs its own:
+# each check is its own job, only the checks whose files changed run, and a
+# check nothing touched is already in the store and costs seconds.
+#
+#   jobs:
+#     nix:
+#       uses: ceenhad/base/.github/workflows/nix-checks.yml@main
+#       with:
+#         filters: .github/ci-filters.yml   # optional
+#
+# `filters` is a dorny/paths-filter file with one entry per check name (and
+# predicate-quantifier 'every', so `!**/*.md` lines exclude). Without it,
+# every check runs on every PR, which is still cheap when most are cached.
+# A filter entry named `flake` runs `nix flake check --no-build` when it
+# matches. workflow_dispatch always runs every check.
+#
+# Drafts run nothing: readying the PR starts the run (the calling workflow
+# must list `ready_for_review` in its pull_request types).
+#
+# By default on build-mini (ceenhad/strongbox machines/build-mini), whose Nix
+# hands aarch64-linux builds to its Linux VM. To use GitHub's hosted runners
+# instead: runs-on: '["ubuntu-latest"]', system: x86_64-linux.
+
+name: nix checks
+
+on:
+  workflow_call:
+    inputs:
+      runs-on:
+        description: Runner labels, as a JSON list.
+        type: string
+        default: '["self-hosted", "build-mini", "nix"]'
+      system:
+        description: The checks.<system> to build.
+        type: string
+        default: aarch64-linux
+      filters:
+        description: A dorny/paths-filter file naming each check's paths.
+        type: string
+        default: ""
+      timeout-minutes:
+        type: number
+        default: 60
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  changes:
+    name: Which checks
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    runs-on: ${{ fromJSON(inputs.runs-on) }}
+    timeout-minutes: 10
+    outputs:
+      checks: ${{ steps.pick.outputs.checks }}
+      flake: ${{ steps.pick.outputs.flake }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v31
+        if: ${{ !contains(fromJSON(inputs.runs-on), 'self-hosted') }}
+      - uses: dorny/paths-filter@v3
+        id: filter
+        if: inputs.filters != '' && github.event_name == 'pull_request'
+        with:
+          predicate-quantifier: every
+          filters: ${{ inputs.filters }}
+      - name: Pick
+        id: pick
+        env:
+          SYSTEM: ${{ inputs.system }}
+          FILTERED: ${{ inputs.filters != '' && github.event_name == 'pull_request' }}
+          CHANGED: ${{ steps.filter.outputs.changes }}
+        run: |
+          all=$(nix eval --json ".#checks.$SYSTEM" --apply builtins.attrNames)
+          if [ "$FILTERED" = true ]; then
+            changed=${CHANGED:-[]}
+            checks=$(jq -nc --argjson a "$all" --argjson c "$changed" '$a - ($a - $c)')
+            flake=$(jq -nr --argjson c "$changed" '$c | index("flake") != null')
+          else
+            checks=$all
+            flake=true
+          fi
+          echo "checks=$checks" >> "$GITHUB_OUTPUT"
+          echo "flake=$flake" >> "$GITHUB_OUTPUT"
+          echo "checks: $checks; flake: $flake"
+
+  flake:
+    name: nix flake check
+    needs: changes
+    if: needs.changes.outputs.flake == 'true'
+    runs-on: ${{ fromJSON(inputs.runs-on) }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v31
+        if: ${{ !contains(fromJSON(inputs.runs-on), 'self-hosted') }}
+      - run: nix flake check --all-systems --no-build --show-trace
+
+  check:
+    name: ${{ matrix.check }}
+    needs: changes
+    if: needs.changes.outputs.checks != '[]'
+    runs-on: ${{ fromJSON(inputs.runs-on) }}
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    strategy:
+      fail-fast: false
+      matrix:
+        check: ${{ fromJSON(needs.changes.outputs.checks) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v31
+        if: ${{ !contains(fromJSON(inputs.runs-on), 'self-hosted') }}
+      - name: nix build .#checks.${{ inputs.system }}.${{ matrix.check }}
+        run: nix build --print-build-logs --no-link ".#checks.${{ inputs.system }}.${{ matrix.check }}"
+
+  gate:
+    name: Nix gate
+    # One status to require in branch protection: red if anything failed or
+    # was cancelled, green when everything that ran passed.
+    if: always()
+    needs: [changes, flake, check]
+    runs-on: ${{ fromJSON(inputs.runs-on) }}
+    timeout-minutes: 5
+    steps:
+      - env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "results: $RESULTS"
+          for r in $RESULTS; do
+            case "$r" in failure|cancelled) exit 1 ;; esac
+          done

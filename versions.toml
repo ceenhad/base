@@ -1,0 +1,20 @@
+# The one place a shared version is chosen. Every ceenhad repo that pins
+# ceenhad/base builds with these, so a bump here (and `nix flake update base`
+# in each repo) moves them all together instead of one at a time.
+#
+# nixpkgs itself is pinned in flake.nix: it decides Node, Python and every
+# other package's exact patch version, and these say which major line.
+
+[rust]
+# rust-overlay's stable channel. Pantheon ran 1.96.0 when this repo started.
+channel = "1.96.0"
+components = ["rust-src", "clippy", "rustfmt", "rust-analyzer"]
+
+[node]
+# nodejs_<major> from nixpkgs. 20 reached end of life in April 2026.
+major = 22
+
+[python]
+# python3<minor> from nixpkgs. The pin's default interpreter, so its packages
+# come from the binary cache rather than building from source.
+minor = 13

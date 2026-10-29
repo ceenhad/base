@@ -1,0 +1,32 @@
+# This repo's own gate, on GitHub's hosted runners: they are free for a
+# public repo, and a public repo must never run on build-mini, where a pull
+# request from a fork would run on the build machine.
+
+name: ci
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  linux:
+    uses: ./.github/workflows/nix-checks.yml
+    with:
+      runs-on: '["ubuntu-latest"]'
+      system: x86_64-linux
+  macos:
+    uses: ./.github/workflows/nix-checks.yml
+    with:
+      runs-on: '["macos-latest"]'
+      system: aarch64-darwin
