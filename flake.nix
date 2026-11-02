@@ -2,12 +2,14 @@
   description = "ceenhad/base: the nixpkgs, Rust, Node and Python every ceenhad repo builds with";
 
   inputs = {
-    # THE pin. Pantheon, lwcp and auctor-home already ran exactly this rev
-    # (26.05pre, 2026-01-08) when this repo started, so adopting it costs
-    # them nothing and build-mini's store is already warm with it. A repo
-    # that follows it shares every store path with the others: one Rust
-    # toolchain, one Node, one Python on disk and in the cache, not one each.
-    nixpkgs.url = "github:NixOS/nixpkgs/3497aa5c9457a9d88d71fa93a4a8368816fbeeba";
+    # THE pin: a nixpkgs-unstable revision, so Hydra has built and cached it.
+    # A repo that follows it shares every store path with the others: one
+    # Rust toolchain, one Node, one Python on disk and in the cache, not one
+    # each. Moved from 2026-01-08 to 2026-11-02 when the weekly version-drift
+    # check (ceenhad/strongbox machines/mac-mini-1) found it 298 days old.
+    # To move it: the latest nixpkgs-unstable commit here, `nix flake update`,
+    # then `nix flake update base` in each repo.
+    nixpkgs.url = "github:NixOS/nixpkgs/5c9de89ec55bff981cb8da1a4ee92b10f1438ffc";
 
     rust-overlay = {
       url = "github:oxalica/rust-overlay";
