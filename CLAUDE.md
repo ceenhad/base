@@ -6,7 +6,7 @@ First work out where this session is running: `command -v nix-remote`.
 
 **On Mac-mini-1** (`nix-remote` exists). This Mac doesn't build; build-mini does.
 
-- Every check: `nix-remote flake check`. One check:
+- Every check CI runs: `nix-remote flake check --system aarch64-linux`. One check:
   `nix-remote build .#checks.<system>.shells` (the only check, in
   `flake.nix`). `aarch64-darwin` is what CI's macOS lane builds;
   `aarch64-linux` is what the other repos' CI builds with on build-mini.
