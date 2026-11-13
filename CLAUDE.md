@@ -2,25 +2,14 @@
 
 ## Where to build and test
 
-First work out where this session is running: `command -v nix-remote`.
-
-**On Mac-mini-1** (`nix-remote` exists). This Mac doesn't build; build-mini does.
-
-- Every check CI runs: `nix-remote flake check --system aarch64-linux`. One check:
-  `nix-remote build .#checks.<system>.shells` (the only check, in
-  `flake.nix`). `aarch64-darwin` is what CI's macOS lane builds;
-  `aarch64-linux` is what the other repos' CI builds with on build-mini.
-- Never plain `nix build` or `nix flake check`: they copy every result back to
-  this Mac and fill its disk.
-- Plain `nix develop` is fine for a shell to edit in and run quick things.
-- Never build `x86_64-linux` on build-mini. This repo's CI is the only place
-  base's x86_64 build runs.
-
-**In a cloud session** (no `nix-remote`): build-mini and the N150 are out of
-reach, and Nix may not be installed. Don't install toolchains to imitate CI.
-Commit, push the branch and open a pull request (a draft builds nothing: mark
-it ready when you want CI), then read the result with `gh pr checks <n>` and
-`gh run view <run-id> --log-failed`.
+How to build from whichever machine you are on is ceenhad/strongbox's
+`machines/building.md`, the one copy for every repo. Strongbox's session hook
+hands each session its machine's part of it. This repo's only check is
+`shells` (`flake.nix` `checks`): `aarch64-darwin` is what CI's macOS lane
+builds; `aarch64-linux` is what the other repos' CI builds with on build-mini.
+Never build `x86_64-linux` on build-mini. This repo's CI is the only place
+base's x86_64 build runs. When you change how anything builds, edit
+`building.md`, never a repo's `CLAUDE.md`.
 
 **CI** This repo is public, so its own `.github/workflows/ci.yml` runs on
 GitHub's hosted runners, which cost nothing for a public repo, and never on
